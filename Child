@@ -1,0 +1,138 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+
+// our signal handler
+void SigHandler(int sig, siginfo_t *info, void *context)
+{
+    // we don't uset the context. it is for advaned signal handling, but
+    // we need to do something with it to get rid of the unused parameter compiler warning
+    context = context;
+
+    switch(sig)
+    {
+        case SIGINT:
+        printf("Process %d receivd SIGINT (%d) from process %d\n", getpid(), sig, info->si_pid);
+	fflush(stdout);
+	exit(0);
+        break;
+
+        case SIGCHLD:
+        printf("Process %d receivd SIGCHLD (%d) from process %d\n", getpid(), sig, info->si_pid);
+	fflush(stdout);
+        break;
+
+        case SIGTERM:
+        printf("Process %d receivd SIGCHLD (%d) from process %d\n", getpid(), sig, info->si_pid);
+	fflush(stdout);
+        break;
+
+        default:
+        printf("Process %d receivd signal %d from process %d\n", getpid(), sig, info->si_pid);
+	fflush(stdout);
+    }
+}
+
+
+int main()
+{
+    SystemConfig winston;
+    GetSystemConfig(&winston);
+
+    int lnTReturn = pthread_create( &lnReceiveThread, NULL, ReceiveThread, (void*)NULL);
+    if (lnTReturn !=0)
+    {
+	    printf("Unable to create threads. Exiting");
+	    exit(-1); // exiting ensures any threads that did start will be terminated
+    }
+
+    // do nothing waiting to be terminated 
+    int count=0;
+    int lnPid = getpid();
+
+    struct sigaction sa;
+    sa.sa_flags = SA_SIGINFO; // indicates siginfo struct is sent to handler
+    sa.sa_sigaction = SigHandler;
+    struct sockaddr_in lsSAMe, lsSAOther;
+    //TestData *lpTestData;
+    
+    int lnSocketId = 0; // contains socket handle
+    int lnReceiveLen = 0;  // number of bytes received on socket 
+    socklen_t lnSockStructLen = sizeof(lsSAOther); // length of socket structure
+
+    // clear receive buffer
+    char lanRecBuf[BUFLEN] = {0};
+    
+    // get the socket setup information
+    SocketSetupStruct lsSocketSetup;
+    SocketSetup(&lsSocketSetup);
+    
+    
+    //create a UDP socket
+    if ((lnSocketId=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
+    {
+        PrintErrorAndExit("socket");
+    }
+    
+    // zero out the structure
+    memset((char *) &lsSAMe, 0, sizeof(lsSAMe));
+    
+    lsSAMe.sin_family = AF_INET; // use IPV4 network addressing
+    lsSAMe.sin_port = htons(winston.lnChild1Port); // convert to network byte order
+    lsSAMe.sin_addr.s_addr = inet_addr(lsSocketSetup.lanServerAddress);
+    
+    
+    //bind socket to our specific port
+    if( bind(lnSocketId, (struct sockaddr*)&lsSAMe, sizeof(lsSAMe) ) == -1)
+    {
+        PrintErrorAndExit("bind");
+    }
+
+    printf("testchild: Installing a CTRL-C Handler\n");
+    // install the signal handler for CTRL-C
+    // use the sigaction library function instead of signal to get more information
+    // about the process that sent the signal
+    // also, signal is deprecated
+    sigaction(SIGINT, &sa, NULL);
+
+    
+    while (1)
+    {    //Infinite loop
+        printf("%d : Inside child with PID %d\n",++count, lnPid);
+        sleep(1);  // Delay for 1 second
+    }
+    return 0;
+}
+  
+
+void *ReceiveThread(void * ptr)
+{
+    ptr = ptr; // just to avoid the unused warning!
+    
+    char lanRecBuf[BUFLEN] = {0};
+    TestData *lpTestData;
+    FILE * lpFile = NULL;
+    lpFile = fopen("server_replies.txt", "w");
+    if (lpFile == NULL)
+    {
+        PrintErrorAndExit("Unable to open file to write server replies");
+    }
+
+    while (1)
+    {
+        //receive a reply and print it
+        //clear the buffer by filling null, it might have previously received data
+        memset(lanRecBuf,'\0', BUFLEN);
+        
+        //try to receive some data, this is a blocking call
+        if (recvfrom(lnSocketId, lanRecBuf, BUFLEN, 0, 
+            (struct sockaddr *) &lsSAOther, &lnSockStructLen) == -1)
+        {
+            PrintErrorAndExit("recvfrom()");
+        }
+        
+        // cast receieved data to expected type and print data
+        exit(-1);
+    }
+}
