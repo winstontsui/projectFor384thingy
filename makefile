@@ -18,3 +18,4 @@ install:
       mv child child1
       cp child1 child2
       cp child1 child3
+      mv child1 child2 child3 sysmgr prockiller $(BIN)
